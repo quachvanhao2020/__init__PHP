@@ -1,0 +1,11 @@
+{
+    "name": "administrator/init_php",
+    "require": {
+        "psr/container": "^1.0"
+    },
+    "autoload": {
+        "files": [
+            "__init__.php"    
+        ]   
+    }
+}
