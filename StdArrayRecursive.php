@@ -1,6 +1,7 @@
 <?php
 
-class StdArrayRecursive extends StdArray implements RecursiveIterator{
+class StdArrayRecursive extends StdArray implements RecursiveIterator
+{
 
     /**
      * Parent container
@@ -94,7 +95,7 @@ class StdArrayRecursive extends StdArray implements RecursiveIterator{
      *
      * @return void
      */
-    public function next()
+    public function next() : void
     {
         next($this->index);
     }
@@ -106,7 +107,7 @@ class StdArrayRecursive extends StdArray implements RecursiveIterator{
      *
      * @return void
      */
-    public function rewind()
+    public function rewind() : void
     {
         reset($this->index);
     }
@@ -118,7 +119,7 @@ class StdArrayRecursive extends StdArray implements RecursiveIterator{
      *
      * @return bool
      */
-    public function valid()
+    public function valid() : bool
     {
         return current($this->index) !== false;
     }
@@ -130,7 +131,7 @@ class StdArrayRecursive extends StdArray implements RecursiveIterator{
      *
      * @return bool  whether container has any children
      */
-    public function hasChildren()
+    public function hasChildren() : bool
     {
         return $this->valid() && $this->current()->children;
     }
@@ -142,14 +143,12 @@ class StdArrayRecursive extends StdArray implements RecursiveIterator{
      *
      * @return array
      */
-    public function getChildren()
+    public function getChildren() : array
     {
         $hash = key($this->index);
-
         if (isset($this->children[$hash])) {
             return $this->children[$hash];
         }
-
         return $this->children;
     }
 
@@ -162,7 +161,7 @@ class StdArrayRecursive extends StdArray implements RecursiveIterator{
      *
      * @return int  number of children in the container
      */
-    public function count()
+    public function count() : int
     {
         return count($this->index);
     }
