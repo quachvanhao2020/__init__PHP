@@ -2,12 +2,15 @@
 class StdArray extends BaseStdArray
 {
     public $id = "-1a";
-    public $validation;
+    private $validation;
     public function offsetSet($offset,$value) : void {
         if(@$this->validation instanceof Validation){
             $this->validation->validate($value);
         }
         parent::offsetSet($offset,$value);
+    }
+    public function setValidation(Validation $validation = null){
+        $this->validation = $validation;
     }
 }
 class Validation{
@@ -42,7 +45,7 @@ class Validation{
                     }
                 }
                 if($val instanceof ArrayAccess){
-                    if(!isset($val[$value])){
+                    if($value && !isset($val[$value])){
                         throw new Exception($key,1);
                     }
                 }

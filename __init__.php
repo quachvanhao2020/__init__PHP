@@ -1,7 +1,6 @@
 <?php
 require_once __DIR__."/BaseStdArray.php";
 require_once __DIR__."/StdArray.php";
-require_once __DIR__."/StdArrayRecursive.php";
 require_once __DIR__."/AbstractContainer.php";
 require_once __DIR__."/FsContainer.php";
 
@@ -61,7 +60,7 @@ function factory(string $name,BaseStdArray &$entity = null,BaseStdArray &$entity
         factory($name."_META",$meta,$metas,$null,$metaContainer);
     }    
     if(isset($entity->id)){
-        $entity = $container->get($entity->id);
+        $entity->merge($container->get($entity->id));
     }
     register_event($name,function($data) use ($entitys){
         foreach ($entitys as $key => $value) {

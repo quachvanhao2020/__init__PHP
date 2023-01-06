@@ -14,14 +14,16 @@ class FsContainer extends AbstractContainer{
     public function ___destruct()
     {
         $entity = $this->entity;
-        unset($this->storage->validation);
-        if(isset($entity)){
+        if(isset($entity) && $entity instanceof StdArray && $entity->getModified()){
             $this->storage[$entity['id']] = $entity;
         }
-        file_put_contents($this->namespace,serialize($this->storage));
+        $this->storage->setValidation(null);
+        $data = serialize($this->storage);
+        file_put_contents($this->namespace,$data);
     }
     public function shutdown()
     {
+        if(!$this->storage->getModified()) return;
         return $this->___destruct();
     }
     public function get($id){
