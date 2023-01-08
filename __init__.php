@@ -1,5 +1,4 @@
 <?php
-require_once __DIR__."/StdArray.php";
 require_once __DIR__."/FsContainer.php";
 
 global $hosts;
