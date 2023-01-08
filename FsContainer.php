@@ -1,4 +1,17 @@
 <?php
+use Psr\Container\ContainerInterface;
+
+abstract class AbstractContainer implements ContainerInterface{
+    public $namespace;
+    public $entity;
+    public $storage;
+    public abstract function list(array $query = null);
+    public abstract function remove(string $id);
+    public abstract function find(string $id);
+    public abstract function findBy(string $key,$value = null);
+    public abstract function shutdown();
+}
+
 class FsContainer extends AbstractContainer{
     public function __construct(string $path = null)
     {
@@ -13,16 +26,17 @@ class FsContainer extends AbstractContainer{
     }
     public function ___destruct()
     {
-        $entity = $this->entity;
-        if(isset($entity) && $entity instanceof StdArray && $entity->getModified()){
-            $this->storage[$entity['id']] = $entity;
-        }
         $this->storage->setValidation(null);
         $data = serialize($this->storage);
         file_put_contents($this->namespace,$data);
     }
     public function shutdown()
     {
+        $entity = $this->entity;
+        if(isset($entity) && $entity instanceof StdArray && $entity->getModified()){
+            $this->storage[$entity['id']] = $entity;
+            return $this->___destruct();
+        }
         if(!$this->storage->getModified()) return;
         return $this->___destruct();
     }
