@@ -106,6 +106,7 @@ class StdArray extends BaseStdArray
     private $validation;
     public function offsetSet($offset,$value) : void {
         if(@$this->validation instanceof Validation){
+            $this->validation->factory = $this;
             $this->validation->validate($value);
         }
         parent::offsetSet($offset,$value);
@@ -116,6 +117,8 @@ class StdArray extends BaseStdArray
 }
 class Validation{
     public $validation;
+    public $factory;
+    public static $mode = "low";
     public function __construct(array $validation)
     {
         $this->validation = $validation;
@@ -124,31 +127,52 @@ class Validation{
         foreach ($data as $key => $value) {
             if(isset($this->validation[$key])){
                 $val = $this->validation[$key];
-                $type = gettype($val);
-                switch ($val) {
+                $type = gettype($value);
+                switch ($val['type']) {
                     case "string":
                         if($type != "string"){
-                            throw new Exception($key,1);
+                            throw new Exception($key."_string",1);
+                        }
+                        $l = strlen($value);
+                        if(isset($val['min']) && $l < $val['min']){
+                            throw new Exception($key."_min", 1);
+                        }
+                        if(isset($val['max']) && $l > $val['max']){
+                            throw new Exception($key."_min", 1);
                         }
                         break;
                     case "integer":
                         if($value == "0") {$data[$key] = 0; return;}
                         $v = intval($value);
                         if($type != "integer" && !$v){
-                            throw new Exception($key,1);
+                            throw new Exception($key."_integer",1);
                         }
                         $data[$key] = $v;
                         break;
+                    case "array":
+                        if(is_array($val['value'])){
+                            if(!in_array($value,$val['value'])){
+                                throw new Exception($key."_array",1);
+                            }
+                        }
+                        break;
+                    case "factory":
+                        if($val['value'] instanceof ArrayAccess){
+                            if($value && !isset($val['value'][$value])){
+                                throw new Exception($key."_entity",1);
+                            }
+                        }
+                        break;
                     default:
                 }
-                if(is_array($val)){
-                    if(!in_array($value,$val)){
-                        throw new Exception($key,1);
-                    }
-                }
-                if($val instanceof ArrayAccess){
-                    if($value && !isset($val[$value])){
-                        throw new Exception($key,1);
+                if(self::$mode != "high") return;
+                if(@$val['unique']){
+                    foreach ($this->factory as $v) {
+                        if(is_array($v)){
+                            if($v[$key] == $value){
+                                throw new Exception($key."_unique", 1);
+                            }
+                        }
                     }
                 }
             }
