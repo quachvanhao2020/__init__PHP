@@ -1,13 +1,202 @@
 <?php
-require_once __DIR__."/FsContainer.php";
-
+use Psr\Container\ContainerInterface;
+abstract class AbstractContainer implements ContainerInterface{
+    public $namespace;
+    public $entity;
+    public $storage;
+    public abstract function list(array $query = null);
+    public abstract function remove(string $id);
+    public abstract function find(string $id);
+    public abstract function findBy(string $key,$value = null);
+    public abstract function shutdown();
+}
+class FsContainer extends AbstractContainer{
+    public function __construct(string $path = null)
+    {
+        if($path){
+            $this->namespace = $path;
+        }
+        $storage = unserialize(@file_get_contents($path));
+        if(!$storage instanceof StdArray){
+            $storage = new StdArray;
+        };
+        $this->storage = $storage;
+    }
+    public function ___destruct()
+    {
+        $this->storage->setValidation(null);
+        $data = serialize($this->storage);
+        file_put_contents($this->namespace,$data);
+    }
+    public function shutdown()
+    {
+        $entity = $this->entity;
+        if(isset($entity) && $entity instanceof StdArray && $entity->getModified()){
+            $this->storage[$entity['id']] = $entity;
+            return $this->___destruct();
+        }
+        if(!$this->storage->getModified()) return;
+        return $this->___destruct();
+    }
+    public function get($id){
+        return $this->storage[$id];
+    }
+    public function has($id){
+        return isset($this->storage[$id]);
+    }
+    public function list(array $query = null){
+        return $this->storage;
+    }
+    public function remove(string $id){
+        unset($this->storage[$id]);
+        return true;
+    }
+    public function find(string $id){
+        return ;
+    }
+    public function findBy(string $key,$value = null){
+        return ;
+    }
+}
+abstract class BaseStdArray extends stdClass implements ArrayAccess,Countable
+{
+    private $id = "-1a";
+    private $modified = false;
+    public function merge($storage = []){
+        if(!is_array($storage)) return;
+        foreach ($storage as $key => $value) {
+            if(!isset($this->{$key}))
+            $this->{$key} = $value;
+        }
+    }
+    public function offsetSet($offset, $value) : void {
+        if (is_null($offset)) {
+            $this[] = $value;
+        } else {
+            $this->{$offset} = $value;
+        }
+        $this->modified = true;
+    }
+    public function getModified(){
+        return $this->modified;
+    }
+    public function getID(){
+        return $this->id;
+    }
+    public function setID(string $id){
+        $this->id = $id;
+    }
+    public function offsetExists($offset) : bool {
+        return isset($this->{$offset});
+    }
+    public function offsetUnset($offset) : void{
+        unset($this->{$offset});
+        $this->modified = true;
+    }
+    public function offsetGet($offset) {
+        return isset($this->{$offset}) ? $this->{$offset} : null;
+    }
+    public function count() : int
+    {
+        return count((array)$this);
+    }
+}
+class StdArray extends BaseStdArray
+{
+    private $validation;
+    public function offsetSet($offset,$value) : void {
+        if(@$this->validation instanceof Validation){
+            $this->validation->factory = $this;
+            $this->validation->validate($value);
+        }
+        parent::offsetSet($offset,$value);
+    }
+    public function setValidation(Validation $validation = null){
+        $this->validation = $validation;
+    }
+}
+class Validation{
+    public $validation;
+    public $factory;
+    public static $mode = "low";
+    public function __construct(array $validation)
+    {
+        $this->validation = $validation;
+    }
+    public function _validate($key,$val,$value,&$data){
+        $type = gettype($value);
+        switch ($val['type']) {
+            case "string":
+                if($type != "string"){
+                    throw new Exception($key."_string",1);
+                }
+                $l = strlen($value);
+                if(isset($val['min']) && $l < $val['min']){
+                    throw new Exception($key."_min", 1);
+                }
+                if(isset($val['max']) && $l > $val['max']){
+                    throw new Exception($key."_min", 1);
+                }
+                break;
+            case "integer":
+                if($value == "0") {$data[$key] = 0; return;}
+                $v = intval($value);
+                if($type != "integer" && !$v){
+                    throw new Exception($key."_integer",1);
+                }
+                if(isset($val['min']) && $v < $val['min']){
+                    throw new Exception($key."_min", 1);
+                }
+                if(isset($val['max']) && $v > $val['max']){
+                    throw new Exception($key."_min", 1);
+                }
+                $data[$key] = $v;
+                break;
+            case "array":
+                if(is_array($val['value'])){
+                    if(!in_array($value,$val['value'])){
+                        throw new Exception($key."_array",1);
+                    }
+                }
+                break;
+            case "factory":
+                if($val['value'] instanceof ArrayAccess){
+                    if($value && !isset($val['value'][$value])){
+                        throw new Exception($key."_entity",1);
+                    }
+                }
+                break;
+            case "bool":
+                if($value == null || $value == "0"){
+                    $data[$key] = false;
+                }else{
+                    $data[$key] = true;
+                }
+                break;
+            default:
+        }
+        if(self::$mode != "high") return;
+        if(@$val['unique']){
+            foreach ($this->factory as $v) {
+                if(is_array($v)){
+                    if($v[$key] == $value){
+                        throw new Exception($key."_unique", 1);
+                    }
+                }
+            }
+        }
+    }
+    public function validate(&$data){
+        foreach ($this->validation as $key => $value) {
+            $this->_validate($key,$value,@$data[$key],$data);
+        }
+    }
+}
 global $hosts;
 global $host_metas;
 global $events;
 $events = [];
-
 factory(!define('_HOST_',"_HOST_")?:_HOST_,$host,$hosts,$null,new FsContainer(__DIR__."/data/_HOST_"));
-
 function factory(string $name,BaseStdArray &$entity = null,BaseStdArray &$entitys = null,BaseStdArray &$metas = null,AbstractContainer $container = null,AbstractContainer $metaContainer = null,array $relationship = []){
     global $hosts;
     $entitys = $container->list();
@@ -20,39 +209,6 @@ function factory(string $name,BaseStdArray &$entity = null,BaseStdArray &$entity
     if(!$metas){
         $metas = new StdArray;
     };
-    $default = function(array $entity_default = [],array $entitys_default = [],array $metas_default = []) use ($hosts,$name,&$entity,&$entitys,&$metas){
-        if(isset($hosts[$name])){
-            $config = $hosts[$name];
-            if(!@$config['init_entity']){
-                $entity->merge($entity_default);
-            }
-            if(!@$config['init_entitys']){
-                $entitys->merge($entitys_default);
-            }
-            if(!@$config['init_metas']){
-                $metas->merge($metas_default);
-            }
-            return;
-            $hosts[$name] = [
-                'id' => $name,
-                'init_entity' => true,
-                'init_entitys' => true,
-                'init_metas' => true,
-            ];
-        }else{
-            $hosts[$name] = [
-                'id' => $name,
-                'init_entity' => false,
-                'init_entitys' => false,
-                'init_metas' => false,
-            ];
-        }
-    };
-    unset($entitys->id);
-    unset($metas->id);
-    if(isset($hosts)){
-        //$default($entity_default,$entitys_default,$metas_default);
-    }
     if($metas instanceof StdArray && $metaContainer){
         factory($name."_META",$meta,$metas,$null,$metaContainer);
     }    
@@ -96,12 +252,10 @@ function factory(string $name,BaseStdArray &$entity = null,BaseStdArray &$entity
         $container->shutdown();
     });
 }
-
 function register_event(string $name,callable $callable){
     global $events;
     $events[$name] = $callable;
 }
-
 function run_event(string $name,$data){
     global $events;
     foreach ($events as $key => $value) {
