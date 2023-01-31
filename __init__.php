@@ -1,5 +1,8 @@
 <?php
 use Psr\Container\ContainerInterface;
+interface IID{
+    public function id() : string;
+}
 abstract class AbstractContainer implements ContainerInterface{
     public $namespace;
     public $entity;
@@ -52,15 +55,15 @@ class FsContainer extends AbstractContainer{
         return true;
     }
     public function find(string $id){
-        return ;
+        return;
     }
     public function findBy(string $key,$value = null){
-        return ;
+        return;
     }
 }
-abstract class BaseStdArray extends stdClass implements ArrayAccess,Countable
+abstract class BaseStdArray extends stdClass implements ArrayAccess,Countable,IID
 {
-    private $id = "-1a";
+    private $id = "";
     private $modified = false;
     public function merge($storage = []){
         if(!is_array($storage)) return;
@@ -80,7 +83,7 @@ abstract class BaseStdArray extends stdClass implements ArrayAccess,Countable
     public function getModified(){
         return $this->modified;
     }
-    public function getID(){
+    public function id() : string{
         return $this->id;
     }
     public function setID(string $id){
@@ -93,7 +96,7 @@ abstract class BaseStdArray extends stdClass implements ArrayAccess,Countable
         unset($this->{$offset});
         $this->modified = true;
     }
-    public function offsetGet($offset) {
+    public function offsetGet(mixed $offset) : mixed {
         return isset($this->{$offset}) ? $this->{$offset} : null;
     }
     public function count() : int
@@ -192,13 +195,9 @@ class Validation{
         }
     }
 }
-global $hosts;
-global $host_metas;
 global $events;
 $events = [];
-factory(!define('_HOST_',"_HOST_")?:_HOST_,$host,$hosts,$null,new FsContainer(__DIR__."/data/_HOST_"));
-function factory(string $name,BaseStdArray &$entity = null,BaseStdArray &$entitys = null,BaseStdArray &$metas = null,AbstractContainer $container = null,AbstractContainer $metaContainer = null,array $relationship = []){
-    global $hosts;
+function factory(string $name,BaseStdArray &$entity = null,BaseStdArray &$entitys = null,BaseStdArray &$metas = null,AbstractContainer $container = null,AbstractContainer $metaContainer = null){
     $entitys = $container->list();
     if(!$entity){
         $entity = new StdArray;
@@ -222,30 +221,6 @@ function factory(string $name,BaseStdArray &$entity = null,BaseStdArray &$entity
             }
         }
     });
-    if(!empty($relationship)){
-        foreach ($relationship as $key => $relation) {
-            foreach ($entitys as $_key => $_value) {
-                $fu = function($entity) use ($relation,$_value){
-                    foreach ($relation as $_key => $value) {
-                        $define = $value;
-                        if($one = $define['one']){
-                            if($entity->{$_key} == $_value->{$one}){
-                                $_value->{$one} = $entity;
-                            }
-                        };
-                        if($many = $define['many']){
-                            foreach ($_value->{$many} as $key => $value) {
-                                if($entity->{$_key} == $value){
-                                    $_value->{$many}[$key] = $entity;
-                                }
-                            }
-                        }
-                    }
-                };
-                run_event($key,$fu);
-            }
-        }
-    }
     register_shutdown_function(function() use($container,&$entity,&$entitys) {
         $container->storage = $entitys;
         $container->entity = $entity;
@@ -262,5 +237,13 @@ function run_event(string $name,$data){
         if($key == $name && is_callable($value)){
             $value($data);
         }
+    }
+}
+function id($obj){
+    if($obj instanceof IID){
+        return $obj->id();
+    }
+    if(is_array($obj)){
+        return @$obj['id'];
     }
 }
