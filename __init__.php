@@ -63,7 +63,7 @@ class FsContainer extends AbstractContainer{
 }
 abstract class BaseStdArray extends stdClass implements ArrayAccess,Countable,IID
 {
-    private $id = "";
+    private $_id = "";
     private $modified = false;
     public function merge($storage = []){
         if(!is_array($storage)) return;
@@ -84,10 +84,10 @@ abstract class BaseStdArray extends stdClass implements ArrayAccess,Countable,II
         return $this->modified;
     }
     public function id() : string{
-        return $this->id;
+        return !empty($this->_id) ? $this->_id : @$this['id'];
     }
     public function setID(string $id){
-        $this->id = $id;
+        $this->_id = $id;
     }
     public function offsetExists($offset) : bool {
         return isset($this->{$offset});
@@ -132,6 +132,11 @@ class Validation{
             case "string":
                 if($type != "string"){
                     throw new Exception($key."_string",1);
+                }
+                if(isset($val['value'])){
+                    if($data[$key] != $val['value']){
+                        throw new Exception("value",1);
+                    }
                 }
                 $l = strlen($value);
                 if(isset($val['min']) && $l < $val['min']){
@@ -231,7 +236,7 @@ function register_event(string $name,callable $callable){
     global $events;
     $events[$name] = $callable;
 }
-function run_event(string $name,$data){
+function run_event(string $name,&$data){
     global $events;
     foreach ($events as $key => $value) {
         if($key == $name && is_callable($value)){
