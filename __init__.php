@@ -160,6 +160,20 @@ class Validation{
                 }
                 $data[$key] = $v;
                 break;
+            case "float":
+                if($value == "0") {$data[$key] = 0; return;}
+                $v = floatval($value);
+                if($type != "float" && !$v){
+                    throw new Exception($key."_float",1);
+                }
+                if(isset($val['min']) && $v < $val['min']){
+                    throw new Exception($key."_min", 1);
+                }
+                if(isset($val['max']) && $v > $val['max']){
+                    throw new Exception($key."_min", 1);
+                }
+                $data[$key] = $v;
+                break;
             case "array":
                 if(is_array($val['value'])){
                     if(!in_array($value,$val['value'])){
@@ -234,13 +248,19 @@ function factory(string $name,BaseStdArray &$entity = null,BaseStdArray &$entity
 }
 function register_event(string $name,callable $callable){
     global $events;
-    $events[$name] = $callable;
+    if(isset($events[$name])){
+        array_push($events[$name],$callable);
+        return;
+    }
+    $events[$name] = [$callable];
 }
 function run_event(string $name,&$data){
     global $events;
     foreach ($events as $key => $value) {
-        if($key == $name && is_callable($value)){
-            $value($data);
+        if($key == $name){
+            foreach ($value as $key => $call) {
+                $call($data);
+            }
         }
     }
 }
