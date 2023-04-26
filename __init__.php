@@ -33,6 +33,7 @@ class FsContainer extends AbstractContainer{
     }
     public function shutdown()
     {
+        if($this->storage->getReadonly()) return;
         $entity = $this->entity;
         if(isset($entity) && $entity instanceof StdArray && $entity->getModified()){
             $this->storage[$entity['id']] = $entity;
@@ -65,6 +66,7 @@ abstract class BaseStdArray extends stdClass implements ArrayAccess,Countable,II
 {
     private $_id = "";
     private $modified = false;
+    private $readonly = false;
     public function merge($storage = []){
         if(!is_array($storage)) return;
         foreach ($storage as $key => $value) {
@@ -82,6 +84,15 @@ abstract class BaseStdArray extends stdClass implements ArrayAccess,Countable,II
     }
     public function getModified(){
         return $this->modified;
+    }
+    public function setModified($modified){
+        $this->modified = $modified;
+    }
+    public function getReadonly(){
+        return $this->readonly;
+    }
+    public function setReadonly($readonly){
+        $this->readonly = $readonly;
     }
     public function id() : string{
         return !empty($this->_id) ? $this->_id : @$this['id'];
@@ -143,7 +154,7 @@ class Validation{
                     throw new Exception($key."_min", 1);
                 }
                 if(isset($val['max']) && $l > $val['max']){
-                    throw new Exception($key."_min", 1);
+                    throw new Exception($key."_max", 1);
                 }
                 break;
             case "integer":
@@ -156,7 +167,7 @@ class Validation{
                     throw new Exception($key."_min", 1);
                 }
                 if(isset($val['max']) && $v > $val['max']){
-                    throw new Exception($key."_min", 1);
+                    throw new Exception($key."_max", 1);
                 }
                 $data[$key] = $v;
                 break;
@@ -170,7 +181,7 @@ class Validation{
                     throw new Exception($key."_min", 1);
                 }
                 if(isset($val['max']) && $v > $val['max']){
-                    throw new Exception($key."_min", 1);
+                    throw new Exception($key."_max", 1);
                 }
                 $data[$key] = $v;
                 break;
@@ -255,6 +266,16 @@ function register_event(string $name,callable $callable){
     $events[$name] = [$callable];
 }
 function run_event(string $name,&$data){
+    global $events;
+    foreach ($events as $key => $value) {
+        if($key == $name){
+            foreach ($value as $key => $call) {
+                $call($data);
+            }
+        }
+    }
+}
+function _run_event(string $name,&$data){
     global $events;
     foreach ($events as $key => $value) {
         if($key == $name){
