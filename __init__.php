@@ -121,9 +121,9 @@ class FsContainer extends AbstractContainer{
         return;
     }
 }
-abstract class BaseStdArray extends stdClass implements ArrayAccess,Countable
+abstract class BaseStdArray extends stdClass implements ArrayAccess,Countable,IID
 {
-    private $id = "";
+    public $id = "";
     public function id() : string{
         return $this->id;
     }
@@ -387,4 +387,10 @@ function id($obj){
     if(is_array($obj)){
         return @$obj['id'];
     }
+}
+function is_arrays($data){
+    if($data instanceof ArrayAccess){
+        return true;
+    }
+    return is_array($data);
 }
