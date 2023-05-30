@@ -3,42 +3,101 @@ use Psr\Container\ContainerInterface;
 interface IID{
     public function id() : string;
 }
+interface IAdapter{
+    public function read(string $path,StdArray $default = null);
+    public function write(string $path,StdArray $data);
+}
+class BinAdapter implements IAdapter{
+    public function read(string $path,StdArray $default = null){
+        $storage = unserialize(@file_get_contents($path));
+        if(!$storage){
+            $storage = $default;
+        }
+        return $storage;
+    }
+    public function write(string $path,StdArray $data){
+        $data = serialize($data);
+        file_put_contents($path,$data);
+    }
+}
+class JsonAdapter implements IAdapter{
+    public function read(string $path,StdArray $default = null){
+        $host = $this->host($path);
+        foreach ($host as $key => $value) {
+            $v = json_decode(@file_get_contents($path."/".$key.".json"),true);
+            if($value == "object"){
+                $class = get_class($default);
+                $default[$key] = new $class($v);
+            }
+        }
+        $default->setModifies();
+        return [];
+    }
+    public function write(string $path,StdArray $data){
+        if(!is_dir($path)){
+            mkdir($path,0755);
+        }
+        $host = $this->host($path);
+        foreach ($data->getModifies() as $k => $v) {
+            $value = $data[$k];
+            $file = $path."/".$k.".json";
+            $this->_write($file,$k,$value,$v,$host);
+        }
+        foreach ($data as $key => $value) {
+            if($value instanceof StdArray){
+                if($value->getModified()){
+                    $file = $path."/".$key.".json";
+                    $this->_write($file,$key,$value,0,$host);
+                }
+            }
+        }
+        file_put_contents($path."/host.json",json_encode($host,JSON_PRETTY_PRINT));
+    }
+    public function _write($file,$k,$value,$v,&$host){
+        if($v == -1){
+            unset($host[$k]);
+            unlink($file);
+        }else{
+            $type = gettype($value);
+            $host[$k] = $type;
+            file_put_contents($file,json_encode($value,JSON_PRETTY_PRINT));
+        }
+    }
+    public function host(string $path){
+        $host = json_decode(@file_get_contents($path."/host.json"),true);
+        if(!$host) $host = [];
+        return $host;
+    }
+}
 abstract class AbstractContainer implements ContainerInterface{
     public $namespace;
     public $entity;
     public $storage;
+    public $adapter;
+    public function __construct(string $namespace = null,IAdapter $adapter)
+    {
+        $this->namespace = $namespace;
+        $this->adapter = $adapter;
+    }
     public abstract function list(array $query = null);
     public abstract function remove(string $id);
     public abstract function find(string $id);
     public abstract function findBy(string $key,$value = null);
     public abstract function shutdown();
+    public abstract function load($default = null);
 }
 class FsContainer extends AbstractContainer{
-    public function __construct(string $path = null)
-    {
-        if($path){
-            $this->namespace = $path;
-        }
-        $storage = unserialize(@file_get_contents($path));
-        if(!$storage instanceof StdArray){
-            $storage = new StdArray;
-        };
-        $this->storage = $storage;
-    }
     public function ___destruct()
     {
-        $this->storage->setValidation(null);
-        $data = serialize($this->storage);
-        file_put_contents($this->namespace,$data);
+        $this->adapter->write($this->namespace,$this->storage);
+    }
+    public function load($default = null){
+        $new = $this->adapter->read($this->namespace,$default);
+        $this->storage->merge($new);
     }
     public function shutdown()
     {
         if($this->storage->getReadonly()) return;
-        $entity = $this->entity;
-        if(isset($entity) && $entity instanceof StdArray && $entity->getModified()){
-            $this->storage[$entity['id']] = $entity;
-            return $this->___destruct();
-        }
         if(!$this->storage->getModified()) return;
         return $this->___destruct();
     }
@@ -62,52 +121,47 @@ class FsContainer extends AbstractContainer{
         return;
     }
 }
-abstract class BaseStdArray extends stdClass implements ArrayAccess,Countable,IID
+abstract class BaseStdArray extends stdClass implements ArrayAccess,Countable
 {
-    private $_id = "";
-    private $modified = false;
-    private $readonly = false;
-    public function merge($storage = []){
-        if(!is_array($storage)) return;
-        foreach ($storage as $key => $value) {
-            if(!isset($this->{$key}))
-            $this->{$key} = $value;
+    private $id = "";
+    public function id() : string{
+        return $this->id;
+    }
+    public function setID(string $id){
+        $this->id = $id;
+    }
+    public function __construct(array $arguments = array()) {
+        if (!empty($arguments)) {
+            foreach ($arguments as $property => $argument) {
+                if ($argument instanceOf Closure) {
+                    $this->{$property} = $argument;
+                } else {
+                    $this->{$property} = $argument;
+                }
+            }
         }
     }
-    public function offsetSet($offset, $value) : void {
+    public function __call($method, $arguments) {
+        if (isset($this->{$method}) && is_callable($this->{$method})) {
+            return call_user_func_array($this->{$method}, $arguments);
+        } else {
+            throw new Exception("Fatal error: Call to undefined method stdObject::{$method}()");
+        }
+    }
+    public function offsetSet($offset,$value) : void{
         if (is_null($offset)) {
             $this[] = $value;
         } else {
             $this->{$offset} = $value;
         }
-        $this->modified = true;
     }
-    public function getModified(){
-        return $this->modified;
-    }
-    public function setModified($modified){
-        $this->modified = $modified;
-    }
-    public function getReadonly(){
-        return $this->readonly;
-    }
-    public function setReadonly($readonly){
-        $this->readonly = $readonly;
-    }
-    public function id() : string{
-        return !empty($this->_id) ? $this->_id : @$this['id'];
-    }
-    public function setID(string $id){
-        $this->_id = $id;
-    }
-    public function offsetExists($offset) : bool {
+    public function offsetExists($offset) : bool{
         return isset($this->{$offset});
     }
     public function offsetUnset($offset) : void{
         unset($this->{$offset});
-        $this->modified = true;
     }
-    public function offsetGet(mixed $offset) : mixed {
+    public function offsetGet($offset) : mixed {
         return isset($this->{$offset}) ? $this->{$offset} : null;
     }
     public function count() : int
@@ -116,6 +170,62 @@ abstract class BaseStdArray extends stdClass implements ArrayAccess,Countable,II
     }
 }
 class StdArray extends BaseStdArray
+{
+    private $modifies = [];
+    private $readonly = false;
+    private $shutdown;
+    public function merge($storage = []){
+        if(!is_iterable($storage)) return;
+        foreach ($storage as $key => $value) {
+            if(!isset($this->{$key}))
+            $this->{$key} = $value;
+        }
+    }
+    public function offsetSet($offset,$value) : void{
+        if(isset($this[$offset])){
+            $this->modifies[$offset] = 0;
+        }else{
+            $this->modifies[$offset] = 1;
+        }
+        parent::offsetSet($offset,$value);
+    }
+    public function offsetUnset($offset) : void{
+        $this->modifies[$offset] = -1;
+        parent::offsetUnset($offset);
+    }
+    public function getModifies(){
+        return $this->modifies;
+    }
+    public function setModifies($modifies = []){
+        $this->modifies = $modifies;
+    }
+    public function getModified(){
+        if(count($this->modifies) != 0){
+            return true;
+        };
+        foreach ($this as $value) {
+            if($value instanceof StdArray){
+                if($value->getModified()){
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    public function getReadonly(){
+        return $this->readonly;
+    }
+    public function setReadonly($readonly){
+        $this->readonly = $readonly;
+    }
+    public function getShutdown(){
+        return $this->shutdown;
+    }
+    public function setShutdown(callable $shutdown){
+        return $this->shutdown = $shutdown;
+    }
+}
+class ValStdArray extends StdArray
 {
     private $validation;
     public function offsetSet($offset,$value) : void {
@@ -227,33 +337,18 @@ class Validation{
 }
 global $events;
 $events = [];
-function factory(string $name,BaseStdArray &$entity = null,BaseStdArray &$entitys = null,BaseStdArray &$metas = null,AbstractContainer $container = null,AbstractContainer $metaContainer = null){
-    $entitys = $container->list();
-    if(!$entity){
-        $entity = new StdArray;
-    };
-    if(!$entitys){
-        $entitys = new StdArray;
-    };
-    if(!$metas){
-        $metas = new StdArray;
-    };
-    if($metas instanceof StdArray && $metaContainer){
-        factory($name."_META",$meta,$metas,$null,$metaContainer);
-    }    
-    if(isset($entity->id)){
-        $entity->merge($container->get($entity->id));
-    }
+function factory(string $name,BaseStdArray &$entitys = null,AbstractContainer $container = null){
+    $container->storage = $entitys;
+    $container->load($entitys);    
     register_event($name,function($data) use ($entitys){
-        foreach ($entitys as $key => $value) {
+        foreach ($entitys as $value) {
             if(is_callable($data)){
                 $data($value);
             }
         }
     });
-    register_shutdown_function(function() use($container,&$entity,&$entitys) {
+    register_shutdown_function(function() use($container,&$entitys) {
         $container->storage = $entitys;
-        $container->entity = $entity;
         $container->shutdown();
     });
 }
@@ -275,7 +370,7 @@ function run_event(string $name,&$data){
         }
     }
 }
-function _run_event(string $name,&$data){
+function _run_event(string $name,$data){
     global $events;
     foreach ($events as $key => $value) {
         if($key == $name){
