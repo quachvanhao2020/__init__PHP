@@ -24,7 +24,7 @@ class JsonAdapter implements IAdapter{
     public function read(string $path,StdArray $default = null){
         $host = $this->host($path);
         foreach ($host as $key => $value) {
-            $v = json_decode(@file_get_contents($path."/".$key.".json"),true);
+            $v = json_decodes(@file_get_contents($path."/".$key.".json"),true);
             if($value == "object"){
                 $class = get_class($default);
                 $default[$key] = new $class($v);
@@ -93,6 +93,7 @@ class FsContainer extends AbstractContainer{
     }
     public function load($default = null){
         $new = $this->adapter->read($this->namespace,$default);
+        if(empty($new)) return;
         $this->storage->merge($new);
     }
     public function shutdown()
@@ -175,9 +176,9 @@ class StdArray extends BaseStdArray
     private $readonly = false;
     private $shutdown;
     public function merge($storage = []){
-        if(!is_iterable($storage)) return;
+        if(!is_iterable($storage) && !($storage instanceof ArrayAccess)) return;
         foreach ($storage as $key => $value) {
-            if(!isset($this->{$key}))
+            //if(!isset($this->{$key}))
             $this->{$key} = $value;
         }
     }
@@ -393,4 +394,9 @@ function is_arrays($data){
         return true;
     }
     return is_array($data);
+}
+function json_decodes(string $data){
+    $data = json_decode($data,true);
+    run_event("json.decode",$data);
+    return $data;
 }
