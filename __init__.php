@@ -74,8 +74,9 @@ abstract class AbstractContainer implements ContainerInterface{
     public $entity;
     public $storage;
     public $adapter;
-    public function __construct(string $namespace = null,IAdapter $adapter)
+    public function __construct(string $namespace = null,IAdapter $adapter = null)
     {
+        if($adapter == null) $adapter = new JsonAdapter();
         $this->namespace = $namespace;
         $this->adapter = $adapter;
     }
@@ -124,22 +125,16 @@ class FsContainer extends AbstractContainer{
 }
 abstract class BaseStdArray extends stdClass implements ArrayAccess,Countable,IID
 {
-    public $id = "";
     public function id() : string{
-        return $this->id;
+        return $this['id'];
     }
-    public function setID(string $id){
-        $this->id = $id;
+    public function __construct($storage = []) {
+        $this->merge($storage);
     }
-    public function __construct(array $arguments = array()) {
-        if (!empty($arguments)) {
-            foreach ($arguments as $property => $argument) {
-                if ($argument instanceOf Closure) {
-                    $this->{$property} = $argument;
-                } else {
-                    $this->{$property} = $argument;
-                }
-            }
+    public function merge($storage = []){
+        if(!is_iterable($storage) && !($storage instanceof ArrayAccess)) return;
+        foreach ($storage as $key => $value) {
+            $this->{$key} = $value;
         }
     }
     public function __call($method, $arguments) {
@@ -175,13 +170,6 @@ class StdArray extends BaseStdArray
     private $modifies = [];
     private $readonly = false;
     private $shutdown;
-    public function merge($storage = []){
-        if(!is_iterable($storage) && !($storage instanceof ArrayAccess)) return;
-        foreach ($storage as $key => $value) {
-            //if(!isset($this->{$key}))
-            $this->{$key} = $value;
-        }
-    }
     public function offsetSet($offset,$value) : void{
         if(isset($this[$offset])){
             $this->modifies[$offset] = 0;
@@ -226,7 +214,7 @@ class StdArray extends BaseStdArray
         return $this->shutdown = $shutdown;
     }
 }
-class ValStdArray extends StdArray
+class StdArrays extends StdArray
 {
     private $validation;
     public function offsetSet($offset,$value) : void {
@@ -349,6 +337,10 @@ function factory(string $name,BaseStdArray &$entitys = null,AbstractContainer $c
         }
     });
     register_shutdown_function(function() use($container,&$entitys) {
+        $error = error_get_last();
+        if (@$error['type'] === E_ERROR) {
+            return;
+        }
         $container->storage = $entitys;
         $container->shutdown();
     });
@@ -385,9 +377,6 @@ function id($obj){
     if($obj instanceof IID){
         return $obj->id();
     }
-    if(is_array($obj)){
-        return @$obj['id'];
-    }
 }
 function is_arrays($data){
     if($data instanceof ArrayAccess){
@@ -399,4 +388,7 @@ function json_decodes(string $data){
     $data = json_decode($data,true);
     run_event("json.decode",$data);
     return $data;
+}
+function arrs(array $data = []){
+    return new StdArrays($data);
 }
