@@ -171,15 +171,17 @@ class StdArray extends BaseStdArray
     private $readonly = false;
     private $shutdown;
     public function offsetSet($offset,$value) : void{
-        if(isset($this[$offset])){
-            $this->modifies[$offset] = 0;
-        }else{
-            $this->modifies[$offset] = 1;
+        if(!$this->readonly){
+            if(isset($this[$offset])){
+                $this->modifies[$offset] = 0;
+            }else{
+                $this->modifies[$offset] = 1;
+            }
         }
         parent::offsetSet($offset,$value);
     }
     public function offsetUnset($offset) : void{
-        $this->modifies[$offset] = -1;
+        !$this->readonly && $this->modifies[$offset] = -1;
         parent::offsetUnset($offset);
     }
     public function getModifies(){
