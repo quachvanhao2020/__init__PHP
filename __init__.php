@@ -394,3 +394,17 @@ function json_decodes(string $data){
 function arrs(array $data = []){
     return new StdArrays($data);
 }
+function find($data,string $key,$value){
+    foreach ($data as $k => $v) {
+        if($k == $key && $v == $value){
+            return $data;
+        }
+        if(is_arrays($v)){
+            $e = find($v,$key,$value);
+            if($e){
+                return $e;
+            }
+        }
+    }
+    return false;
+}
