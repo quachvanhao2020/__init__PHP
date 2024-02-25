@@ -51,7 +51,7 @@ class JsonAdapter implements IAdapter{
                 }
             }
         }
-        file_put_contents($path."/host.json",json_encode($host,JSON_PRETTY_PRINT));
+        //file_put_contents($path."/host.json",json_encode($host,JSON_PRETTY_PRINT));
     }
     public function _write($file,$k,$value,$v,&$host){
         if($v == -1){
@@ -64,6 +64,17 @@ class JsonAdapter implements IAdapter{
         }
     }
     public function host(string $path){
+        $host = [];
+        $fs = scandir($path);
+        foreach ($fs as $key => $value) {
+            if($value == "." || $value == ".."){
+                continue;
+            }
+            $host[str_replace(".json","",$value)] = "object";
+        }
+        return $host;
+        var_dump($host);
+        die();
         $host = json_decode(@file_get_contents($path."/host.json"),true);
         if(!$host) $host = [];
         return $host;
